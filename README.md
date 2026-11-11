@@ -7,7 +7,35 @@ enforces the official rules.
 
 ![field](docs/screenshot.png)
 
-## Setup
+## Download (no Python needed)
+
+Every push builds standalone versions with GitHub Actions
+([.github/workflows/build.yml](.github/workflows/build.yml)). Download them from the
+workflow run's **Artifacts**, or from **Releases** for tagged versions (`v*`):
+
+| System | File | Run |
+|---|---|---|
+| Windows | `rcj-sim-windows-x64.zip` → `rcj-sim.exe` | double-click, or `rcj-sim.exe match.yaml` |
+| Linux | `rcj-sim-linux-x64.tar.gz` → `rcj-sim` | `./rcj-sim` |
+| macOS (Apple Silicon) | `rcj-sim-macos-arm64.tar.gz` → folder `rcj-sim/` | `./rcj-sim/rcj-sim` |
+
+* **No arguments** opens the match setup window. All the command-line options below work too.
+* The executable includes Python and the whole standard library, so robot programs can
+  `import math, random, statistics, json, ...` with nothing installed.
+* On first start, the example robots are copied to `~/RCJ-Sim/examples` so you can open
+  and edit them.
+* **macOS** gets a folder instead of a single file because it starts much faster. macOS blocks
+  unsigned downloads, so run `xattr -dr com.apple.quarantine rcj-sim` once, or right-click → Open.
+
+Build it yourself:
+
+```bash
+.venv/bin/pip install pyinstaller==6.11.1
+.venv/bin/pyinstaller packaging/rcj_sim.spec --noconfirm     # -> dist/rcj-sim (single file)
+RCJ_ONEDIR=1 .venv/bin/pyinstaller packaging/rcj_sim.spec   # -> dist/rcj-sim/ (folder)
+```
+
+## Setup from source
 
 ```bash
 python3 -m venv .venv
@@ -17,8 +45,21 @@ python3 -m venv .venv
 ## Run a match
 
 ```bash
-.venv/bin/python -m rcj_sim examples/match.yaml
+.venv/bin/python -m rcj_sim                        # opens the match setup window
+.venv/bin/python -m rcj_sim examples/match.yaml    # or start straight from a config file
 ```
+
+### Match setup window
+
+When started without a config file, a setup window opens with these controls:
+
+* **Referee mode, match and rule options.** Choose free play, basic or full rules, set the half duration and number of halves, pick which team kicks off first, and turn individual rules on or off.
+* **Simulation options.** Turn on sensor noise, cameras blocked by other robots, or motor acceleration limits. Set the front camera's FOV and range, the kick speed and the maximum wheel speed.
+* **Robots.** Each row has an on/off checkbox, name, team and program file. **Program** opens a file browser, **Copy** duplicates a robot so several can run the same code, and **Del** removes one.
+* **Load… / Save as…** read and write `match.yaml` files.
+* **Start match** (or Enter) starts the match. **Esc** in the match returns to the setup screen.
+
+The last setup is remembered in `~/RCJ-Sim/last_match.yaml`.
 
 Quick form without a config file. `--blue` / `--yellow` take one program per robot:
 
@@ -52,7 +93,10 @@ Other options:
 | H | help |
 | drag | move the ball or a robot |
 | mouse wheel over a robot | rotate it |
-| right-click a robot / its card | remove as *damaged* / put back |
+| right-click a robot | **hide** it: it leaves the field and its program keeps running |
+| **Show** / **Hide** button on a robot's card (right panel) | put a hidden robot back where it was (or on a free neutral spot if that place is taken) / hide it |
+| Esc | back to the setup window (or quit when started with a config file) |
+| Q | quit |
 
 ## Match configuration (`match.yaml`)
 
@@ -220,6 +264,10 @@ rcj_sim/
   sim.py         simulation loop
   render.py      pygame window
   config.py      YAML / CLI configuration
+  setup_gui.py   match setup window
+  resources.py   example / user folders (source and executable)
 examples/        sample robots and match.yaml
+packaging/       PyInstaller spec for the standalone executable
+superstrika/     runs the Superstrika team's robot code in the simulator
 tests/           pytest suite
 ```

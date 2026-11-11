@@ -201,7 +201,7 @@ class Referee:
         for e in sim.entities:
             if e.penalty_until is not None and sim.time >= e.penalty_until:
                 e.penalty_until = None
-                if not e.damaged:
+                if not e.hidden:
                     self.place_on_neutral_spot(e)
                     e.body.frozen = self.state != "playing"
                     sim.event(f"{e.cfg.name} returns to the field")

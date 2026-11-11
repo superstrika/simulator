@@ -1,5 +1,6 @@
 """Command line entry point.
 
+  python -m rcj_sim                         (no arguments: opens the match setup window)
   python -m rcj_sim examples/match.yaml
   python -m rcj_sim --mode free --blue examples/striker.py examples/goalie.py --yellow examples/striker.py
   python -m rcj_sim examples/match.yaml --headless --duration 120
@@ -40,7 +41,7 @@ def make_config(args):
     elif args.blue is not None or args.yellow is not None:
         cfg = from_lists(args.blue, args.yellow, args.mode or "basic")
     else:
-        raise SystemExit("give a match YAML file or --blue/--yellow robot programs (see --help)")
+        return None   # no configuration: the setup window asks for it
     if args.half:
         cfg.referee.half_duration_s = args.half
     if args.seed is not None:
@@ -74,6 +75,12 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     cfg = make_config(args)
     sys.path.insert(0, os.getcwd())
+    if cfg is None:
+        if args.headless or args.screenshot:
+            raise SystemExit("--headless / --screenshot need a match YAML file or --blue/--yellow programs")
+        from .setup_gui import run_app
+        run_app(scale=args.scale, quiet=args.quiet)
+        return
     from .sim import Simulation
     sim = Simulation(cfg, echo_logs=not args.quiet)
     if args.headless:

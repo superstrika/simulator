@@ -95,7 +95,7 @@ def _apply(dc, data, label):
         setattr(dc, k, v)
 
 
-def load_yaml(path):
+def load_yaml(path, validate=True):
     import yaml
     with open(path) as f:
         data = yaml.safe_load(f) or {}
@@ -112,7 +112,7 @@ def load_yaml(path):
         cfg.robots.append(RobotConfig(
             name=str(r.get("name", f"R{i + 1}")), team=r["team"], code=code,
             enabled=bool(r.get("enabled", True)), start=r.get("start")))
-    return cfg.validate()
+    return cfg.validate() if validate else cfg
 
 
 def from_lists(blue, yellow, mode="basic"):
@@ -123,3 +123,33 @@ def from_lists(blue, yellow, mode="basic"):
         for i, p in enumerate(paths):
             cfg.robots.append(RobotConfig(name=f"{team[0].upper()}{i + 1}", team=team, code=p))
     return cfg.validate()
+
+
+def to_dict(cfg, base_dir=None):
+    """MatchConfig -> plain dict in the match.yaml format."""
+    from dataclasses import asdict
+    ref = asdict(cfg.referee)
+    mode = ref.pop("mode")
+    robots = []
+    for r in cfg.robots:
+        code = os.path.abspath(r.code)
+        if base_dir:
+            rel = os.path.relpath(code, base_dir)
+            if not rel.startswith(".."):
+                code = rel
+        d = {"name": r.name, "team": r.team, "code": code}
+        if not r.enabled:
+            d["enabled"] = False
+        if r.start:
+            d["start"] = dict(r.start)
+        robots.append(d)
+    return {"mode": mode, "referee": ref, "sim": asdict(cfg.sim), "robots": robots}
+
+
+def save_yaml(cfg, path):
+    import yaml
+    path = os.path.abspath(path)
+    data = to_dict(cfg, os.path.dirname(path))
+    with open(path, "w") as f:
+        f.write("# RoboCupJunior Soccer simulator match configuration\n")
+        yaml.safe_dump(data, f, sort_keys=False)

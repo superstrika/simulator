@@ -1,0 +1,121 @@
+name: Build executables
+
+# Builds a standalone simulator (no Python or requirements needed) for Windows, Linux and macOS.
+# - every push / pull request: run the tests, build, smoke-test and upload the builds as artifacts
+# - pushing a tag like v1.2.0: also publish them on a GitHub release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64
+            exe: dist/rcj-sim.exe
+            onedir: "0"
+          - os: ubuntu-22.04            # older glibc -> runs on more Linux versions
+            target: linux-x64
+            exe: dist/rcj-sim
+            onedir: "0"
+          - os: macos-latest            # Apple Silicon
+            target: macos-arm64
+            exe: dist/rcj-sim/rcj-sim
+            onedir: "1"                 # a folder: one-file builds start slowly on macOS
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller==6.11.1
+
+      - name: Build
+        env:
+          RCJ_ONEDIR: ${{ matrix.onedir }}
+        run: pyinstaller packaging/rcj_sim.spec --noconfirm --clean
+
+      - name: Smoke test - headless match
+        run: |
+          "${{ matrix.exe }}" examples/match.yaml --headless --duration 20 --quiet | tee out.txt
+          grep -q "simulated" out.txt
+          ! grep -E "crashed|hung" out.txt
+
+      - name: Smoke test - robot code using the standard library
+        run: |
+          cat > ci_bot.py <<'EOF'
+          import statistics, json, random, collections, fractions, xml.etree.ElementTree as ET
+          from rcj_sim import BALL
+          def main(robot):
+              a = [robot.get_object_angle(BALL) for _ in range(3)]
+              json.dumps({"mean": statistics.mean(a)}); ET.fromstring("<a/>")
+              while True:
+                  robot.delay(100)
+          EOF
+          "${{ matrix.exe }}" --mode free --blue ci_bot.py --headless --duration 2 --quiet | tee out.txt
+          grep -E "B1 +running" out.txt
+
+      - name: Smoke test - rendering
+        env:
+          SDL_VIDEODRIVER: dummy
+        run: |
+          "${{ matrix.exe }}" examples/match.yaml --screenshot shot.png --duration 1 --quiet
+          test -s shot.png
+
+      - name: Package
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "rcj-sim-${{ matrix.target }}.zip" ./dist/rcj-sim.exe
+          else
+            tar -czf "rcj-sim-${{ matrix.target }}.tar.gz" -C dist rcj-sim
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rcj-sim-${{ matrix.target }}
+          path: rcj-sim-${{ matrix.target }}.*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true

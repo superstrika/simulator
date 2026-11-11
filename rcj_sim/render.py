@@ -1,9 +1,10 @@
 """pygame top-down view and controls.
 
 Keys:   Space pause/resume   N single step   +/- speed   R reset match
-        K kick-off           F camera cones  D debug (trails, line sensors)   H help   Esc quit
+        K kick-off   F camera cones   D debug (trails, line sensors)   H help
+        Esc back to setup (or quit)   Q quit
 Mouse:  drag the ball or a robot; scroll over a robot to rotate it;
-        right-click a robot (or click its panel card) to remove / restore it (damaged).
+        right-click a robot to hide it; Show / Hide buttons on its card in the right panel.
 """
 import math
 import os
@@ -44,10 +45,13 @@ PANEL_W = 350
 
 def auto_scale(pg):
     try:
-        info = pg.display.Info()
-        sw, sh = info.current_w, info.current_h
+        sw, sh = pg.display.get_desktop_sizes()[0]
     except Exception:
-        return 4.0
+        try:
+            info = pg.display.Info()
+            sw, sh = info.current_w, info.current_h
+        except Exception:
+            return 4.0
     if sw <= 0 or sh <= 0:
         return 4.0
     s = min((sw - PANEL_W - 2 * MARGIN - 40) / (2 * WALL_X),
@@ -74,6 +78,7 @@ class Renderer:
         self.selected = None
         self.trail = deque(maxlen=240)
         self.card_rects = []
+        self.card_buttons = []
         self.static = self._draw_static()
         self._robot_polys = robot_polygons()
 
@@ -280,27 +285,59 @@ class Renderer:
         for i, l in enumerate(lines):
             self._txt(surf, l, (x + 16, y + 14 + 22 * i), TEXT)
 
+    def _card_heights(self, n):
+        """Full cards if they fit, otherwise compact ones (the selected robot stays full)."""
+        avail = self.height - 175
+        full, compact, gap = 128, 50, 8
+        ents = self.sim.entities
+        if n * (full + gap) <= avail:
+            return [full] * n
+        hs = [full if e is self.selected else compact for e in ents]
+        if sum(h + gap for h in hs) > avail:
+            hs = [compact] * n
+        return hs
+
     def _draw_panel(self, surf):
         pg, sim = self.pg, self.sim
         x0 = self.width - PANEL_W + 10
         y = 10
         self.card_rects = []
-        for e in sim.entities:
-            h = 128
+        self.card_buttons = []
+        bottom = self.height - 165
+        heights = self._card_heights(len(sim.entities))
+        for k, (e, h) in enumerate(zip(sim.entities, heights)):
+            if y + h > bottom:
+                self._txt(surf, f"+ {len(sim.entities) - k} more robots", (x0 + 4, y), DIM, self.font_small)
+                break
             card = pg.Rect(x0, y, PANEL_W - 20, h)
             self.card_rects.append((card, e))
-            pg.draw.rect(surf, CARD_BG, card, border_radius=6)
+            pg.draw.rect(surf, CARD_BG if not e.hidden else (38, 41, 47), card, border_radius=6)
             if e is self.selected:
                 pg.draw.rect(surf, WHITE, card, 1, border_radius=6)
-            pg.draw.rect(surf, TEAM_COL[e.cfg.team], pg.Rect(x0, y, 5, h),
+            team_col = TEAM_COL[e.cfg.team] if not e.hidden else tuple(c // 2 for c in TEAM_COL[e.cfg.team])
+            pg.draw.rect(surf, team_col, pg.Rect(x0, y, 5, h),
                          border_top_left_radius=6, border_bottom_left_radius=6)
+            # hide / show button
+            btn = pg.Rect(card.right - 58, y + 6, 50, 18)
+            self.card_buttons.append((btn, e))
+            if e.hidden:
+                pg.draw.rect(surf, (60, 150, 90), btn, border_radius=4)
+                self._txt(surf, "Show", btn.center, WHITE, self.font_small, "center")
+            else:
+                pg.draw.rect(surf, (70, 74, 84), btn, border_radius=4)
+                self._txt(surf, "Hide", btn.center, TEXT, self.font_small, "center")
+
             status = e.status
             if e.penalty_until is not None:
                 status += f" {max(0, e.penalty_until - sim.time):.0f}s"
-            scol = {"running": GREEN, "crashed": RED, "hung": RED}.get(e.status, DIM)
-            self._txt(surf, f"{e.index + 1}  {e.cfg.name}", (x0 + 12, y + 6), TEXT)
-            self._txt(surf, status, (card.right - 8, y + 6), scol, anchor="topright")
+            scol = {"running": GREEN, "crashed": RED, "hung": RED, "hidden": (230, 180, 60)}.get(e.status, DIM)
+            name_col = TEXT if not e.hidden else DIM
+            self._txt(surf, f"{e.index + 1}  {e.cfg.name}", (x0 + 12, y + 6), name_col)
+            self._txt(surf, status, (btn.left - 8, y + 7), scol, self.font_small, "topright")
             self._txt(surf, os.path.basename(e.cfg.code), (x0 + 12, y + 24), DIM, self.font_small)
+            if h < 100:
+                y += h + 8
+                continue
 
             b = e.body
             ball = sim.world.ball.position
@@ -313,10 +350,12 @@ class Renderer:
                 l1 = f"gyro {gyro:6.1f}   ball {ba:6.1f}"
                 l2 = f"front cam: {'%.0f cm' % dist if in_view else '-'}   " \
                      f"{'HOLD' if b.holding else ('drib' if b.dribbler_on else '')}"
+            elif e.hidden:
+                l1, l2 = "hidden - program keeps running", "click Show to put it back"
             else:
                 l1, l2 = "off the field", ""
-            self._txt(surf, l1, (x0 + 12, y + 42), TEXT, self.font_small)
-            self._txt(surf, l2, (x0 + 12, y + 58), TEXT, self.font_small)
+            self._txt(surf, l1, (x0 + 12, y + 42), TEXT if not e.hidden else DIM, self.font_small)
+            self._txt(surf, l2, (x0 + 12, y + 58), TEXT if not e.hidden else DIM, self.font_small)
             # wheels
             wl = " ".join(f"{w:5.0f}" for w in hw.wheels)
             self._txt(surf, f"wheels {wl}", (x0 + 12, y + 74), DIM, self.font_small)
@@ -350,6 +389,12 @@ class Renderer:
                 return e
         return None
 
+    def card_button_at(self, sx, sy):
+        for rect, e in getattr(self, "card_buttons", []):
+            if rect.collidepoint(sx, sy):
+                return e
+        return None
+
     def card_at(self, sx, sy):
         for rect, e in self.card_rects:
             if rect.collidepoint(sx, sy):
@@ -378,10 +423,12 @@ def save_screenshot(sim, path, duration, scale=None):
     print(f"saved {path}")
 
 
-def run_window(sim, scale=None, duration=None):
+def run_window(sim, scale=None, duration=None, from_setup=False):
+    """Show the match. Returns "quit" (window closed) or "back" (Esc, when started from the setup screen)."""
     os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
     import pygame as pg
     pg.init()
+    result = "quit"
     if scale is None:
         scale = auto_scale(pg)
     r = _make_renderer(pg, sim, scale)
@@ -401,7 +448,10 @@ def run_window(sim, scale=None, duration=None):
                 running = False
             elif ev.type == pg.KEYDOWN:
                 k = ev.key
-                if k in (pg.K_ESCAPE, pg.K_q):
+                if k == pg.K_ESCAPE:
+                    running = False
+                    result = "back" if from_setup else "quit"
+                elif k == pg.K_q:
                     running = False
                 elif k == pg.K_SPACE:
                     paused = not paused
@@ -428,6 +478,10 @@ def run_window(sim, scale=None, duration=None):
             elif ev.type == pg.MOUSEBUTTONDOWN:
                 wx, wy = r.s2w(*ev.pos)
                 if ev.button == 1:
+                    hb = r.card_button_at(*ev.pos)
+                    if hb is not None:
+                        sim.toggle_hidden(hb)
+                        continue
                     card = r.card_at(*ev.pos)
                     if card is not None:
                         r.selected = card
@@ -441,9 +495,15 @@ def run_window(sim, scale=None, duration=None):
                             dragging = e
                             r.selected = e
                 elif ev.button == 3:
-                    e = r.robot_at(wx, wy) or r.card_at(*ev.pos)
+                    e = r.robot_at(wx, wy)
                     if e is not None:
-                        sim.toggle_damaged(e)
+                        sim.hide(e)                      # right-click on the field: hide
+                        if dragging is e:
+                            dragging = None
+                    else:
+                        e = r.card_at(*ev.pos)
+                        if e is not None:
+                            sim.toggle_hidden(e)         # right-click a card: hide / show
             elif ev.type == pg.MOUSEBUTTONUP and ev.button == 1:
                 dragging = None
             elif ev.type == pg.MOUSEWHEEL:
@@ -476,4 +536,6 @@ def run_window(sim, scale=None, duration=None):
         clock.tick(60)
 
     sim.shutdown()
-    pg.quit()
+    if not (from_setup and result == "back"):
+        pg.quit()
+    return result

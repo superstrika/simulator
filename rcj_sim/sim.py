@@ -1,4 +1,5 @@
 """Simulation core: ties physics, robot hardware, robot programs and the referee together."""
+import math
 import random
 from collections import deque
 
@@ -17,16 +18,17 @@ class RobotEntity:
         self.hw = RobotHardware(sim, self.body, random.Random(sim.cfg.sim.seed * 1000 + index))
         self.ctrl = RobotController(sim, self)
         self.penalty_until = None   # sim time when an out-of-bounds penalty ends
-        self.damaged = False        # removed by hand (UI right-click)
+        self.hidden = False         # taken off the field by hand (UI right-click)
+        self.hidden_pose = None     # (x, y, angle) where it was when hidden
 
     @property
     def available(self):
-        return self.penalty_until is None and not self.damaged
+        return self.penalty_until is None and not self.hidden
 
     @property
     def status(self):
-        if self.damaged:
-            return "damaged"
+        if self.hidden:
+            return "hidden"
         if self.penalty_until is not None:
             return "penalty"
         return self.ctrl.state
@@ -106,7 +108,8 @@ class Simulation:
         self.goal_log = []
         for e in self.entities:
             e.penalty_until = None
-            e.damaged = False
+            e.hidden = False
+            e.hidden_pose = None
         self.referee = Referee(self)
         self.start()
 
@@ -132,18 +135,44 @@ class Simulation:
             self.step()
 
     # ------------------------------------------------------------ manual referee (UI)
-    def toggle_damaged(self, e):
-        if e.damaged:
-            e.damaged = False
-            if e.penalty_until is None:
-                self.referee.place_on_neutral_spot(e)
-                e.body.frozen = self.referee.state != "playing"
-            self.event(f"{e.cfg.name} back on the field")
+    def hide(self, e):
+        """Take a robot off the field for the time being (its program keeps running)."""
+        if e.hidden:
+            return
+        e.hidden = True
+        if e.body.on_field:
+            e.hidden_pose = (e.body.x, e.body.y, e.body.angle)
+        e.body.remove()
+        e.hw.line_state = [False] * len(e.hw.line_state)
+        self.event(f"{e.cfg.name} hidden")
+
+    def show(self, e):
+        """Put a hidden robot back where it was, or on a free neutral spot if that place is taken."""
+        if not e.hidden:
+            return
+        e.hidden = False
+        if e.penalty_until is not None:
+            self.event(f"{e.cfg.name} shown (still serving its penalty)")
+            return
+        pose = e.hidden_pose
+        if pose is not None and self._spot_free(pose[0], pose[1], e):
+            e.body.place(*pose)
         else:
-            e.damaged = True
-            e.body.remove()
-            e.hw.line_state = [False] * len(e.hw.line_state)
-            self.event(f"{e.cfg.name} removed (damaged)")
+            self.referee.place_on_neutral_spot(e)
+        e.body.frozen = self.referee.state != "playing"
+        e.hidden_pose = None
+        self.event(f"{e.cfg.name} back on the field")
+
+    def toggle_hidden(self, e):
+        (self.show if e.hidden else self.hide)(e)
+
+    def _spot_free(self, x, y, e):
+        from .constants import BALL_RADIUS, ROBOT_RADIUS
+        for o in self.entities:
+            if o is not e and o.body.on_field and math.hypot(o.body.x - x, o.body.y - y) < 2 * ROBOT_RADIUS:
+                return False
+        b = self.world.ball.position
+        return math.hypot(b.x - x, b.y - y) >= ROBOT_RADIUS + BALL_RADIUS
 
     def move_ball(self, x, y):
         self.world.place_ball(x, y)
