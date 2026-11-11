@@ -1,0 +1,24 @@
+# Superstrika hunter.py running in the simulator.
+#   .venv/bin/python -m rcj_sim superstrika/match.yaml
+#
+# The robot code is loaded unchanged from ../Superstrika-new (or $SUPERSTRIKA_PATH).
+# Camera/motor assumptions are in superstrika/superstrika_bridge.py (SETTINGS).
+mode: free
+
+sim:
+  # The bridge models the real camera (60 deg FOV on a tilting servo) itself,
+  # so the simulator's front camera must see everything in front of the robot.
+  front_fov_deg: 179
+  front_range_cm: 400
+  accel_limit: true         # a real robot cannot change speed instantly
+  max_accel: 400            # cm/s^2
+  echo_prints: false        # gyroMovement prints on every loop; see the robot card / logs/superstrika.log
+
+robots:
+  - name: Superstrika
+    team: blue              # attacks the yellow goal (hunter.py always targets the yellow goal)
+    code: hunter_sim.py
+  - name: Y-Goalie
+    team: yellow
+    code: ../examples/goalie.py
+    enabled: false           # set true to play against the example goalie

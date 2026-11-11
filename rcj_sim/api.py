@@ -161,6 +161,11 @@ class Robot:
         self._call()
         return int(self._c.local_time * 1000)
 
+    def micros(self):
+        """Microseconds of simulation time (finer resolution than millis())."""
+        self._call()
+        return int(round(self._c.local_time * 1_000_000))
+
     def log(self, *args):
         """Print a message tagged with this robot's name (same as print)."""
         self._c.log_write(" ".join(str(a) for a in args) + "\n")

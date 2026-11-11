@@ -367,7 +367,7 @@ def save_screenshot(sim, path, duration, scale=None):
     import pygame as pg
     pg.init()
     r = _make_renderer(pg, sim, scale or 4.0)
-    r.show_fov = True
+    r.show_fov = sim.cfg.sim.front_fov_deg < 170   # very wide cones only hide the field
     sim.start()
     sim.run_for(duration)
     surf = pg.Surface((r.width, r.height))

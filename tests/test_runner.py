@@ -132,3 +132,17 @@ def test_example_match_runs_clean():
 
 def test_idle_constant_used():
     assert "def main" in IDLE
+
+
+def test_micros_resolution(make_sim):
+    code = """
+def main(robot):
+    a = robot.micros()
+    b = robot.micros()
+    print(b - a)
+    while True:
+        robot.delay(1000)
+"""
+    sim = make_sim([("R", "blue", code)])
+    sim.run_for(0.1)
+    assert int(logs(sim, "R")[0]) == 100      # one API call = 0.1 ms

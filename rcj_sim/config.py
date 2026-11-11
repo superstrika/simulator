@@ -43,6 +43,7 @@ class SimConfig:
     # scheduler
     api_call_cost_ms: float = 0.1         # simulated CPU time used by every robot API call
     watchdog_s: float = 2.0               # real seconds without an API call -> robot marked hung
+    echo_prints: bool = True              # echo robot print() output to the console
 
 
 @dataclass

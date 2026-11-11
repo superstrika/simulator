@@ -14,6 +14,7 @@ from .field import (
 )
 
 KICKER_SLOTS = [(15, 0), (75, 0), (50, 35), (50, -35), (60, 60), (60, -60)]
+LOP_NEAR_CM = 30.0   # lack of progress is only called while a robot is near the ball
 RECEIVER_SLOTS = [(45, 0), (75, 0), (50, 35), (50, -35), (60, 60), (60, -60)]
 
 
@@ -238,7 +239,10 @@ class Referee:
     def _lack_of_progress(self, bx, by):
         sim, cfg = self.sim, self.cfg
         ax, ay = self._lop_anchor
-        if math.hypot(bx - ax, by - ay) > cfg.lack_of_progress_cm:
+        contested = any(e.body.on_field and math.hypot(e.body.x - bx, e.body.y - by) < LOP_NEAR_CM
+                        for e in sim.entities)
+        if math.hypot(bx - ax, by - ay) > cfg.lack_of_progress_cm or not contested:
+            # progress, or nobody is playing the ball (e.g. robots still searching for it)
             self._lop_anchor = (bx, by)
             self._lop_time = sim.time
         elif sim.time - self._lop_time >= cfg.lack_of_progress_s:

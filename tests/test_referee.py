@@ -120,7 +120,7 @@ def test_multiple_defense(make_sim):
 
 def test_lack_of_progress(make_sim):
     sim = make_sim([("B1", "blue", IDLE)], mode="basic", referee={"lack_of_progress_s": 2.0})
-    sim.move_robot(sim.entity("B1"), -50, -60)
+    sim.move_robot(sim.entity("B1"), 30, 25)          # near the ball, not on a spot
     sim.move_ball(10, 10)
     sim.run_for(2.5)
     assert tuple(sim.world.ball.position) == (0, 0)   # nearest unoccupied neutral spot
@@ -132,6 +132,14 @@ def test_lack_of_progress_skips_occupied_spot(make_sim):
     sim.move_ball(10, 10)
     sim.run_for(2.5)
     assert tuple(sim.world.ball.position) == (C.HALF_L - 45, 40)
+
+
+def test_no_lack_of_progress_when_nobody_near_ball(make_sim):
+    sim = make_sim([("B1", "blue", IDLE)], mode="basic", referee={"lack_of_progress_s": 2.0})
+    sim.move_robot(sim.entity("B1"), -80, -60)
+    sim.move_ball(10, 10)
+    sim.run_for(2.5)
+    assert tuple(sim.world.ball.position) == (10, 10)
 
 
 def test_full_mode_limits_team_size(make_sim):

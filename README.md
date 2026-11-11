@@ -191,6 +191,15 @@ Sources: [rules](https://robocup-junior.github.io/soccer-rules/master/rules.html
 * [examples/goalie.py](examples/goalie.py): rides the front line of its own penalty area by polling the line sensors, and tracks the ball sideways.
 * [examples/line_test.py](examples/line_test.py): line interrupt demo.
 
+## Running existing robot code (Superstrika)
+
+[superstrika/](superstrika/README.md) runs the Superstrika team's real `hunter.py` unchanged,
+on simulated motors, gyro, servo-tilted camera and dribbler:
+
+```bash
+.venv/bin/python -m rcj_sim superstrika/match.yaml
+```
+
 ## Tests
 
 ```bash

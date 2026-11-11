@@ -260,5 +260,5 @@ class RobotController:
     def _emit(self, line):
         t = self.sim.time
         self.logs.append((t, line))
-        if self.sim.echo_logs:
+        if self.sim.echo_logs and self.sim.cfg.sim.echo_prints:
             _real_stdout.write(f"[{t:7.2f}s {self.name}] {line}\n")
