@@ -1,0 +1,37 @@
+# Example match configuration.  Run with:
+#   .venv/bin/python -m rcj_sim examples/match.yaml
+#
+# mode: free  -> play until the first goal
+#       basic -> score, 2 halves, kick-off after goals, sides swap at half time
+#       full  -> basic + out of bounds, multiple defense, lack of progress
+mode: basic
+
+referee:
+  half_duration_s: 120      # official: 600 (10 minutes)
+  first_kickoff: blue
+
+sim:
+  noise: false              # sensor noise + gyro drift
+  occlusion: false          # robots can hide the ball from cameras
+  accel_limit: false        # realistic motor acceleration
+  front_fov_deg: 60
+  front_range_cm: 250
+  kick_speed: 300
+
+# team = the goal the team defends in the first half.
+# The same code file can be used by several robots.
+robots:
+  - name: B-Striker
+    team: blue
+    code: striker.py
+  - name: B-Goalie
+    team: blue
+    code: goalie.py
+  - name: Y-Striker
+    team: yellow
+    code: striker.py
+  - name: Y-Goalie
+    team: yellow
+    code: goalie.py
+    enabled: true            # set false to leave this robot out
+    # start: {x: 75, y: 0, heading: 0}   # optional kick-off spot (heading 0 = facing opponent goal)

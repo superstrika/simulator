@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rcj-sim"
+version = "1.0.0"
+description = "RoboCupJunior Soccer simulator with a Python robot API"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = ["pygame>=2.5", "pymunk>=6.5,<7", "PyYAML>=6.0"]
+
+[project.scripts]
+rcj-sim = "rcj_sim.__main__:main"
+
+[tool.setuptools]
+packages = ["rcj_sim"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
